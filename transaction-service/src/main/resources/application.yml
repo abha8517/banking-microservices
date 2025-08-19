@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: transaction-service
+  datasource:
+    url: jdbc:postgresql://postgres:5432/banking
+    username: postgres
+    password: postgres
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
