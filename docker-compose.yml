@@ -38,6 +38,29 @@ services:
     environment:
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
 
+  statement-service:
+    build: ./statement-service
+    depends_on:
+      - discovery-server
+      - transaction-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
+  cards-service:
+    build: ./cards-service
+    depends_on:
+      - discovery-server
+      - account-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
+  notification-service:
+    build: ./notification-service
+    depends_on:
+      - discovery-server
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
   gateway:
     build: ./gateway
     ports:

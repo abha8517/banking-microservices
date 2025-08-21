@@ -1,5 +1,6 @@
 package com.company.banking.authservice.service;
 
+import com.company.banking.authservice.client.NotificationServiceFeignClient;
 import com.company.banking.authservice.client.PersonServiceFeignClient;
 import com.company.banking.authservice.dto.AuthRequest;
 import com.company.banking.authservice.dto.AuthResponse;
@@ -27,6 +28,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
     private final PersonServiceFeignClient personServiceFeignClient;
+    private final NotificationServiceFeignClient notificationServiceFeignClient;
     private final UserDetailsService userDetailsService;
 
     @Transactional
@@ -49,6 +51,14 @@ public class AuthService {
         user.setPersonId(newPerson.id());
         user.setRoles(Set.of("ROLE_USER")); // Default role
         userRepository.save(user);
+
+        // Step 3: Send welcome notification
+        var notificationRequest = new com.company.banking.authservice.client.NotificationRequest(
+                newPerson.email(),
+                "Welcome to Our Bank!",
+                "Hello " + newPerson.firstName() + ", thank you for registering."
+        );
+        notificationServiceFeignClient.sendNotification(notificationRequest);
     }
 
     public AuthResponse login(AuthRequest request) {

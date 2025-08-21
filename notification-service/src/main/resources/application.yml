@@ -1,12 +1,10 @@
 spring:
   application:
     name: notification-service
-  datasource:
-    url: jdbc:postgresql://postgres:5432/banking
-    username: postgres
-    password: postgres
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

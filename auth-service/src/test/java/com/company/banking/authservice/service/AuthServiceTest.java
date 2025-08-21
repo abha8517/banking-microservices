@@ -1,5 +1,6 @@
 package com.company.banking.authservice.service;
 
+import com.company.banking.authservice.client.NotificationServiceFeignClient;
 import com.company.banking.authservice.client.PersonServiceFeignClient;
 import com.company.banking.authservice.dto.AuthRequest;
 import com.company.banking.authservice.dto.AuthResponse;
@@ -40,6 +41,8 @@ class AuthServiceTest {
     @Mock
     private PersonServiceFeignClient personServiceFeignClient;
     @Mock
+    private NotificationServiceFeignClient notificationServiceFeignClient;
+    @Mock
     private UserDetailsService userDetailsService;
 
     @InjectMocks
@@ -61,6 +64,7 @@ class AuthServiceTest {
         // Then
         verify(personServiceFeignClient, times(1)).createPerson(any(PersonDTO.class));
         verify(userRepository, times(1)).save(any(User.class));
+        verify(notificationServiceFeignClient, times(1)).sendNotification(any());
     }
 
     @Test

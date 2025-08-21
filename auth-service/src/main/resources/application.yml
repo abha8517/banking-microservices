@@ -1,37 +1,10 @@
-server:
-  port: 8082
-
 spring:
   application:
     name: auth-service
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-  datasource:
-    url: jdbc:h2:mem:auth-service
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+  config:
+    import: "optional:configserver:http://localhost:8888"
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "*"
-
-# JWT Configuration
-jwt:
-  # This should be a long, random string and stored securely (e.g., in environment variables or a secret manager)
-  secret: ${JWT_SECRET:41Dk432fD23423aADF342lkj234ADF987asdf987ADF345lkj345ADF345ADF345ADF}
-  # Expiration time in milliseconds (e.g., 1 hour)
-  expiration: 3600000
