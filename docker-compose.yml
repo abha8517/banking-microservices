@@ -1,23 +1,54 @@
 version: '3.8'
+
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: banking
+  discovery-server:
+    build: ./discovery-server
     ports:
-      - "5432:5432"
-  zookeeper:
-    image: bitnami/zookeeper:latest
-  kafka:
-    image: bitnami/kafka:latest
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      - "8761:8761"
+
+  person-service:
+    build: ./person-service
     depends_on:
-      - zookeeper
+      - discovery-server
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
+  auth-service:
+    build: ./auth-service
+    depends_on:
+      - discovery-server
+      - person-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      - JWT_SECRET=41Dk432fD23423aADF342lkj234ADF987asdf987ADF345lkj345ADF345ADF345ADF
+
+  account-service:
+    build: ./account-service
+    depends_on:
+      - discovery-server
+      - person-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
+  transaction-service:
+    build: ./transaction-service
+    depends_on:
+      - discovery-server
+      - account-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+
+  gateway:
+    build: ./gateway
     ports:
-      - "9092:9092"
-  # Note: individual services can be built and added here for local dev
+      - "8080:8080"
+    depends_on:
+      - discovery-server
+      - auth-service
+      - person-service
+      - account-service
+      - transaction-service
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-server:8761/eureka/
+      # This needs to match the secret in auth-service and gateway's application.yml
+      - JWT_SECRET=41Dk432fD23423aADF342lkj234ADF987asdf987ADF345lkj345ADF345ADF345ADF
