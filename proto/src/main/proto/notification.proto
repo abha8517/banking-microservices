@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option java_package = "com.company.banking.grpc.notification";
+option java_multiple_files = true;
+
+package notification;
+
+import "google/protobuf/empty.proto";
+
+service NotificationService {
+  rpc SendNotification(NotificationRequest) returns (google.protobuf.Empty);
+}
+
+message NotificationRequest {
+  string to = 1;
+  string subject = 2;
+  string body = 3;
+}

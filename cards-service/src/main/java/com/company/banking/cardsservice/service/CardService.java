@@ -1,10 +1,12 @@
 package com.company.banking.cardsservice.service;
 
-import com.company.banking.cardsservice.client.AccountServiceFeignClient;
 import com.company.banking.cardsservice.model.Card;
 import com.company.banking.cardsservice.model.CardStatus;
 import com.company.banking.cardsservice.repository.CardRepository;
+import com.company.banking.grpc.account.AccountRequest;
+import com.company.banking.grpc.account.AccountServiceGrpc;
 import lombok.RequiredArgsConstructor;
+import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +19,14 @@ import java.util.concurrent.ThreadLocalRandom;
 public class CardService {
 
     private final CardRepository cardRepository;
-    private final AccountServiceFeignClient accountServiceFeignClient;
+
+    @GrpcClient("account-service")
+    private AccountServiceGrpc.AccountServiceBlockingStub accountServiceBlockingStub;
 
     @Transactional
     public Card issueNewCard(Long accountId) {
         // 1. Validate account exists
-        accountServiceFeignClient.getAccountById(accountId);
+        accountServiceBlockingStub.getAccountById(AccountRequest.newBuilder().setAccountId(accountId).build());
 
         // 2. Generate new card details (mock implementation)
         Card card = Card.builder()

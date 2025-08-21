@@ -1,6 +1,9 @@
 package com.company.banking.transactionservice.service;
 
-import com.company.banking.transactionservice.client.AccountServiceFeignClient;
+import com.company.banking.grpc.account.AccountRequest;
+import com.company.banking.grpc.account.AccountResponse;
+import com.company.banking.grpc.account.AccountServiceGrpc;
+import com.company.banking.grpc.account.UpdateBalanceRequest;
 import com.company.banking.transactionservice.dto.DepositRequest;
 import com.company.banking.transactionservice.dto.TransferRequest;
 import com.company.banking.transactionservice.dto.WithdrawRequest;
@@ -8,11 +11,11 @@ import com.company.banking.transactionservice.exception.InsufficientFundsExcepti
 import com.company.banking.transactionservice.mapper.TransactionMapper;
 import com.company.banking.transactionservice.model.Transaction;
 import com.company.banking.transactionservice.repository.TransactionRepository;
-import com.company.common.dto.AccountDTO;
 import com.company.common.dto.TransactionDTO;
 import com.company.common.dto.TransactionType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,14 +30,16 @@ import java.util.stream.Collectors;
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
-    private final AccountServiceFeignClient accountServiceFeignClient;
     private final TransactionMapper transactionMapper;
+
+    @GrpcClient("account-service")
+    private AccountServiceGrpc.AccountServiceBlockingStub accountServiceBlockingStub;
 
     @Transactional
     public void deposit(DepositRequest request) {
         log.info("Processing deposit for accountId: {}", request.accountId());
-        // 1. Get account details
-        AccountDTO account = accountServiceFeignClient.getAccountById(request.accountId());
+        // 1. Get account details from account-service via gRPC
+        AccountResponse account = getAccount(request.accountId());
 
         // 2. Create and save transaction log
         Transaction transaction = Transaction.builder()
@@ -46,9 +51,9 @@ public class TransactionService {
                 .build();
         transactionRepository.save(transaction);
 
-        // 3. Update account balance
-        BigDecimal newBalance = account.balance().add(request.amount());
-        accountServiceFeignClient.updateAccountBalance(request.accountId(), newBalance);
+        // 3. Update account balance via gRPC
+        BigDecimal newBalance = new BigDecimal(account.getBalance()).add(request.amount());
+        updateAccountBalance(request.accountId(), newBalance);
         log.info("Deposit successful for accountId: {}. New balance: {}", request.accountId(), newBalance);
     }
 
@@ -56,10 +61,11 @@ public class TransactionService {
     public void withdraw(WithdrawRequest request) {
         log.info("Processing withdrawal for accountId: {}", request.accountId());
         // 1. Get account details
-        AccountDTO account = accountServiceFeignClient.getAccountById(request.accountId());
+        AccountResponse account = getAccount(request.accountId());
+        BigDecimal currentBalance = new BigDecimal(account.getBalance());
 
         // 2. Check for sufficient funds
-        if (account.balance().compareTo(request.amount()) < 0) {
+        if (currentBalance.compareTo(request.amount()) < 0) {
             throw new InsufficientFundsException("Insufficient funds for withdrawal.");
         }
 
@@ -74,8 +80,8 @@ public class TransactionService {
         transactionRepository.save(transaction);
 
         // 4. Update account balance
-        BigDecimal newBalance = account.balance().subtract(request.amount());
-        accountServiceFeignClient.updateAccountBalance(request.accountId(), newBalance);
+        BigDecimal newBalance = currentBalance.subtract(request.amount());
+        updateAccountBalance(request.accountId(), newBalance);
         log.info("Withdrawal successful for accountId: {}. New balance: {}", request.accountId(), newBalance);
     }
 
@@ -86,17 +92,19 @@ public class TransactionService {
         }
         log.info("Processing transfer from accountId: {} to accountId: {}", request.fromAccountId(), request.toAccountId());
         // 1. Get details for both accounts
-        AccountDTO fromAccount = accountServiceFeignClient.getAccountById(request.fromAccountId());
-        AccountDTO toAccount = accountServiceFeignClient.getAccountById(request.toAccountId());
+        AccountResponse fromAccount = getAccount(request.fromAccountId());
+        AccountResponse toAccount = getAccount(request.toAccountId());
+        BigDecimal fromBalance = new BigDecimal(fromAccount.getBalance());
+        BigDecimal toBalance = new BigDecimal(toAccount.getBalance());
 
         // 2. Check for sufficient funds
-        if (fromAccount.balance().compareTo(request.amount()) < 0) {
+        if (fromBalance.compareTo(request.amount()) < 0) {
             throw new InsufficientFundsException("Insufficient funds for transfer.");
         }
 
         // 3. Create and save transaction logs for both accounts
         LocalDateTime timestamp = LocalDateTime.now();
-        String toDescription = "Transfer to account " + toAccount.accountNumber();
+        String toDescription = "Transfer to account " + toAccount.getAccountNumber();
         Transaction fromTransaction = Transaction.builder()
                 .accountId(request.fromAccountId())
                 .relatedAccountId(request.toAccountId())
@@ -106,7 +114,7 @@ public class TransactionService {
                 .description(toDescription)
                 .build();
 
-        String fromDescription = "Transfer from account " + fromAccount.accountNumber();
+        String fromDescription = "Transfer from account " + fromAccount.getAccountNumber();
         Transaction toTransaction = Transaction.builder()
                 .accountId(request.toAccountId())
                 .relatedAccountId(request.fromAccountId())
@@ -119,10 +127,10 @@ public class TransactionService {
         transactionRepository.saveAll(List.of(fromTransaction, toTransaction));
 
         // 4. Update balances on both accounts
-        BigDecimal newFromBalance = fromAccount.balance().subtract(request.amount());
-        BigDecimal newToBalance = toAccount.balance().add(request.amount());
-        accountServiceFeignClient.updateAccountBalance(request.fromAccountId(), newFromBalance);
-        accountServiceFeignClient.updateAccountBalance(request.toAccountId(), newToBalance);
+        BigDecimal newFromBalance = fromBalance.subtract(request.amount());
+        BigDecimal newToBalance = toBalance.add(request.amount());
+        updateAccountBalance(request.fromAccountId(), newFromBalance);
+        updateAccountBalance(request.toAccountId(), newToBalance);
         log.info("Transfer successful.");
     }
 
@@ -132,5 +140,16 @@ public class TransactionService {
         return transactionRepository.findByAccountId(accountId).stream()
                 .map(transactionMapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    private AccountResponse getAccount(Long accountId) {
+        return accountServiceBlockingStub.getAccountById(AccountRequest.newBuilder().setAccountId(accountId).build());
+    }
+
+    private void updateAccountBalance(Long accountId, BigDecimal newBalance) {
+        accountServiceBlockingStub.updateAccountBalance(UpdateBalanceRequest.newBuilder()
+                .setAccountId(accountId)
+                .setNewBalance(newBalance.toPlainString())
+                .build());
     }
 }

@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option java_package = "com.company.banking.grpc.card";
+option java_multiple_files = true;
+
+package card;
+
+service CardService {
+  rpc IssueNewCard(IssueNewCardRequest) returns (CardResponse);
+  rpc ActivateCard(CardActionRequest) returns (CardResponse);
+  rpc BlockCard(CardActionRequest) returns (CardResponse);
+  rpc GetCardsByAccountId(GetCardsByAccountIdRequest) returns (CardListResponse);
+}
+
+enum CardStatus {
+  CARD_STATUS_UNSPECIFIED = 0;
+  INACTIVE = 1;
+  ACTIVE = 2;
+  BLOCKED = 3;
+  EXPIRED = 4;
+}
+
+message IssueNewCardRequest {
+  int64 account_id = 1;
+}
+
+message CardActionRequest {
+  int64 card_id = 1;
+}
+
+message GetCardsByAccountIdRequest {
+  int64 account_id = 1;
+}
+
+message CardResponse {
+  int64 id = 1;
+  int64 account_id = 2;
+  string card_number = 3;
+  string card_type = 4;
+  string expiration_date = 5; // Using string for LocalDate
+  string cvv = 6;
+  CardStatus status = 7;
+}
+
+message CardListResponse {
+  repeated CardResponse cards = 1;
+}

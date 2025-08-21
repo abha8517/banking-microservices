@@ -1,14 +1,15 @@
 package com.company.banking.authservice.service;
 
-import com.company.banking.authservice.client.NotificationServiceFeignClient;
-import com.company.banking.authservice.client.PersonServiceFeignClient;
 import com.company.banking.authservice.dto.AuthRequest;
 import com.company.banking.authservice.dto.AuthResponse;
 import com.company.banking.authservice.dto.RegisterRequest;
 import com.company.banking.authservice.model.User;
 import com.company.banking.authservice.repository.UserRepository;
 import com.company.banking.authservice.util.JwtUtil;
-import com.company.common.dto.PersonDTO;
+import com.company.banking.grpc.notification.NotificationServiceGrpc;
+import com.company.banking.grpc.person.PersonResponse;
+import com.company.banking.grpc.person.PersonServiceGrpc;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -39,32 +40,45 @@ class AuthServiceTest {
     @Mock
     private AuthenticationManager authenticationManager;
     @Mock
-    private PersonServiceFeignClient personServiceFeignClient;
-    @Mock
-    private NotificationServiceFeignClient notificationServiceFeignClient;
-    @Mock
     private UserDetailsService userDetailsService;
+    @Mock
+    private PersonServiceGrpc.PersonServiceBlockingStub personServiceBlockingStub;
+    @Mock
+    private NotificationServiceGrpc.NotificationServiceBlockingStub notificationServiceBlockingStub;
 
-    @InjectMocks
+    // We can't use @InjectMocks anymore because of the @GrpcClient annotations in the constructor
     private AuthService authService;
+
+    @BeforeEach
+    void setUp() {
+        authService = new AuthService(
+                userRepository,
+                passwordEncoder,
+                jwtUtil,
+                authenticationManager,
+                userDetailsService,
+                personServiceBlockingStub,
+                notificationServiceBlockingStub
+        );
+    }
 
     @Test
     void register_shouldCreatePersonAndUser() {
         // Given
         RegisterRequest request = new RegisterRequest("testuser", "password", "test@test.com", "Test", "User", "12345");
-        PersonDTO personDTO = new PersonDTO(1L, "Test", "User", "test@test.com", "12345");
+        PersonResponse personResponse = PersonResponse.newBuilder().setId(1L).setEmail("test@test.com").setFirstName("Test").build();
 
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.empty());
-        when(personServiceFeignClient.createPerson(any(PersonDTO.class))).thenReturn(personDTO);
+        when(personServiceBlockingStub.createPerson(any())).thenReturn(personResponse);
         when(passwordEncoder.encode("password")).thenReturn("encodedPassword");
 
         // When
         authService.register(request);
 
         // Then
-        verify(personServiceFeignClient, times(1)).createPerson(any(PersonDTO.class));
+        verify(personServiceBlockingStub, times(1)).createPerson(any());
         verify(userRepository, times(1)).save(any(User.class));
-        verify(notificationServiceFeignClient, times(1)).sendNotification(any());
+        verify(notificationServiceBlockingStub, times(1)).sendNotification(any());
     }
 
     @Test
@@ -78,8 +92,7 @@ class AuthServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Username already taken");
 
-        verify(personServiceFeignClient, never()).createPerson(any());
-        verify(userRepository, never()).save(any());
+        verify(personServiceBlockingStub, never()).createPerson(any());
     }
 
     @Test

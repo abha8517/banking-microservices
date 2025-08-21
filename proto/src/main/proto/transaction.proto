@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+option java_package = "com.company.banking.grpc.transaction";
+option java_multiple_files = true;
+
+package transaction;
+
+import "google/protobuf/empty.proto";
+
+service TransactionService {
+  rpc Deposit(DepositRequest) returns (google.protobuf.Empty);
+  rpc Withdraw(WithdrawRequest) returns (google.protobuf.Empty);
+  rpc Transfer(TransferRequest) returns (google.protobuf.Empty);
+  rpc GetTransactionsByAccountId(TransactionHistoryRequest) returns (TransactionHistoryResponse);
+}
+
+enum TransactionType {
+  TRANSACTION_TYPE_UNSPECIFIED = 0;
+  DEPOSIT = 1;
+  WITHDRAWAL = 2;
+  TRANSFER = 3;
+}
+
+message DepositRequest {
+  int64 account_id = 1;
+  string amount = 2;
+  string description = 3;
+}
+
+message WithdrawRequest {
+  int64 account_id = 1;
+  string amount = 2;
+  string description = 3;
+}
+
+message TransferRequest {
+  int64 from_account_id = 1;
+  int64 to_account_id = 2;
+  string amount = 3;
+  string description = 4;
+}
+
+message TransactionHistoryRequest {
+  int64 account_id = 1;
+}
+
+message TransactionMessage {
+  int64 id = 1;
+  int64 account_id = 2;
+  int64 related_account_id = 3;
+  TransactionType transaction_type = 4;
+  string amount = 5;
+  string timestamp = 6; // Using string for LocalDateTime
+  string description = 7;
+}
+
+message TransactionHistoryResponse {
+  repeated TransactionMessage transactions = 1;
+}

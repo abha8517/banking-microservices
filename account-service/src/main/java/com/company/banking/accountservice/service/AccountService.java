@@ -1,15 +1,17 @@
 package com.company.banking.accountservice.service;
 
-import com.company.banking.accountservice.client.PersonServiceFeignClient;
 import com.company.banking.accountservice.exception.AccountNotFoundException;
 import com.company.banking.accountservice.exception.PersonNotFoundException;
 import com.company.banking.accountservice.mapper.AccountMapper;
 import com.company.banking.accountservice.model.Account;
 import com.company.banking.accountservice.repository.AccountRepository;
+import com.company.banking.grpc.person.PersonRequest;
+import com.company.banking.grpc.person.PersonServiceGrpc;
 import com.company.common.dto.AccountDTO;
 import com.company.common.dto.AccountType;
-import feign.FeignException;
+import io.grpc.StatusRuntimeException;
 import lombok.RequiredArgsConstructor;
+import net.devh.boot.grpc.client.inject.GrpcClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,18 +28,20 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final AccountMapper accountMapper;
-    private final PersonServiceFeignClient personServiceFeignClient;
+
+    @GrpcClient("person-service")
+    private PersonServiceGrpc.PersonServiceBlockingStub personServiceBlockingStub;
 
     @Transactional
     public AccountDTO createAccount(Long personId, AccountType accountType) {
         log.info("Request to create a {} account for personId: {}", accountType, personId);
 
-        // Step 1: Validate that the person exists by calling person-service
+        // Step 1: Validate that the person exists by calling person-service via gRPC
         try {
-            personServiceFeignClient.getPersonById(personId);
+            personServiceBlockingStub.getPersonById(PersonRequest.newBuilder().setPersonId(personId).build());
             log.info("Successfully validated person with id: {}", personId);
-        } catch (FeignException.NotFound e) {
-            log.error("Person with id {} not found via person-service.", personId);
+        } catch (StatusRuntimeException e) {
+            log.error("Person with id {} not found via person-service.", personId, e);
             throw new PersonNotFoundException("Person with id " + personId + " not found.");
         }
 

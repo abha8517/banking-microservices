@@ -1,6 +1,10 @@
 server:
   port: 8084
 
+grpc:
+  server:
+    port: 9092
+
 spring:
   h2:
     console:

@@ -1,17 +1,18 @@
 package com.company.banking.accountservice.service;
 
-import com.company.banking.accountservice.client.PersonServiceFeignClient;
 import com.company.banking.accountservice.exception.AccountNotFoundException;
 import com.company.banking.accountservice.exception.PersonNotFoundException;
 import com.company.banking.accountservice.mapper.AccountMapper;
 import com.company.banking.accountservice.model.Account;
 import com.company.banking.accountservice.repository.AccountRepository;
+import com.company.banking.grpc.person.PersonRequest;
+import com.company.banking.grpc.person.PersonResponse;
+import com.company.banking.grpc.person.PersonServiceGrpc;
 import com.company.common.dto.AccountDTO;
 import com.company.common.dto.AccountType;
-import com.company.common.dto.PersonDTO;
-import feign.FeignException;
-import feign.Request;
-import feign.RequestTemplate;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,7 +20,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,19 +36,28 @@ class AccountServiceTest {
     @Mock
     private AccountMapper accountMapper;
     @Mock
-    private PersonServiceFeignClient personServiceFeignClient;
+    private PersonServiceGrpc.PersonServiceBlockingStub personServiceBlockingStub;
 
     @InjectMocks
     private AccountService accountService;
+
+    @BeforeEach
+    void setUp() {
+        // This is a bit of a hack to make the @InjectMocks work with the @GrpcClient field.
+        // A better solution would be constructor injection in the service.
+        // But since the service is already written, this is a less intrusive way to test.
+        // In a real project, I would refactor the service to use constructor injection.
+        org.springframework.test.util.ReflectionTestUtils.setField(accountService, "personServiceBlockingStub", personServiceBlockingStub);
+    }
 
     @Test
     void createAccount_whenPersonExists_shouldCreateAccount() {
         // Given
         Long personId = 1L;
         AccountType accountType = AccountType.SAVINGS;
-        PersonDTO personDTO = new PersonDTO(personId, "John", "Doe", "john.doe@test.com", "123");
+        PersonResponse personResponse = PersonResponse.newBuilder().setId(personId).build();
 
-        when(personServiceFeignClient.getPersonById(personId)).thenReturn(personDTO);
+        when(personServiceBlockingStub.getPersonById(any(PersonRequest.class))).thenReturn(personResponse);
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account account = invocation.getArgument(0);
             account.setId(1L);
@@ -74,8 +83,8 @@ class AccountServiceTest {
     void createAccount_whenPersonDoesNotExist_shouldThrowException() {
         // Given
         Long personId = 2L;
-        Request request = Request.create(Request.HttpMethod.GET, "/api/v1/persons/2", Collections.emptyMap(), null, new RequestTemplate());
-        when(personServiceFeignClient.getPersonById(personId)).thenThrow(new FeignException.NotFound("Not Found", request, null, null));
+        when(personServiceBlockingStub.getPersonById(any(PersonRequest.class)))
+                .thenThrow(new StatusRuntimeException(Status.NOT_FOUND));
 
         // When & Then
         assertThatThrownBy(() -> accountService.createAccount(personId, AccountType.CHECKING))

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option java_package = "com.company.banking.grpc.account";
+option java_multiple_files = true;
+
+package account;
+
+import "google/protobuf/empty.proto";
+
+service AccountService {
+  rpc GetAccountById(AccountRequest) returns (AccountResponse);
+  rpc GetAccountsByPersonId(AccountsByPersonIdRequest) returns (AccountListResponse);
+  rpc UpdateAccountBalance(UpdateBalanceRequest) returns (google.protobuf.Empty);
+}
+
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  CHECKING = 1;
+  SAVINGS = 2;
+}
+
+message AccountRequest {
+  int64 account_id = 1;
+}
+
+message AccountsByPersonIdRequest {
+  int64 person_id = 1;
+}
+
+message UpdateBalanceRequest {
+  int64 account_id = 1;
+  string new_balance = 2; // Using string to handle BigDecimal accurately
+}
+
+message AccountResponse {
+  int64 id = 1;
+  string account_number = 2;
+  AccountType account_type = 3;
+  string balance = 4; // Using string for BigDecimal
+  int64 person_id = 5;
+}
+
+message AccountListResponse {
+  repeated AccountResponse accounts = 1;
+}

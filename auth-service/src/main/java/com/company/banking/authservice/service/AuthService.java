@@ -1,15 +1,17 @@
 package com.company.banking.authservice.service;
 
-import com.company.banking.authservice.client.NotificationServiceFeignClient;
-import com.company.banking.authservice.client.PersonServiceFeignClient;
 import com.company.banking.authservice.dto.AuthRequest;
 import com.company.banking.authservice.dto.AuthResponse;
 import com.company.banking.authservice.dto.RegisterRequest;
 import com.company.banking.authservice.model.User;
 import com.company.banking.authservice.repository.UserRepository;
 import com.company.banking.authservice.util.JwtUtil;
-import com.company.common.dto.PersonDTO;
-import lombok.RequiredArgsConstructor;
+import com.company.banking.grpc.person.CreatePersonRequest;
+import com.company.banking.grpc.person.PersonResponse;
+import com.company.banking.grpc.person.PersonServiceGrpc;
+import com.company.banking.grpc.notification.NotificationRequest;
+import com.company.banking.grpc.notification.NotificationServiceGrpc;
+import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -20,45 +22,60 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
-    private final PersonServiceFeignClient personServiceFeignClient;
-    private final NotificationServiceFeignClient notificationServiceFeignClient;
     private final UserDetailsService userDetailsService;
+    private final PersonServiceGrpc.PersonServiceBlockingStub personServiceBlockingStub;
+    private final NotificationServiceGrpc.NotificationServiceBlockingStub notificationServiceBlockingStub;
+
+    public AuthService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtUtil jwtUtil,
+                       AuthenticationManager authenticationManager,
+                       UserDetailsService userDetailsService,
+                       @GrpcClient("person-service") PersonServiceGrpc.PersonServiceBlockingStub personServiceBlockingStub,
+                       @GrpcClient("notification-service") NotificationServiceGrpc.NotificationServiceBlockingStub notificationServiceBlockingStub) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
+        this.authenticationManager = authenticationManager;
+        this.userDetailsService = userDetailsService;
+        this.personServiceBlockingStub = personServiceBlockingStub;
+        this.notificationServiceBlockingStub = notificationServiceBlockingStub;
+    }
 
     @Transactional
     public void register(RegisterRequest request) {
-        // Optional: Check if username or email already exists in auth-service
         userRepository.findByUsername(request.username()).ifPresent(u -> {
             throw new IllegalStateException("Username already taken");
         });
 
-        // Step 1: Create Person in person-service
-        // Note: person-service will throw an exception if email/phone is a duplicate
-        PersonDTO personRequest = new PersonDTO(null, request.firstName(), request.lastName(), request.email(), request.phone());
-        PersonDTO newPerson = personServiceFeignClient.createPerson(personRequest);
+        CreatePersonRequest personRequest = CreatePersonRequest.newBuilder()
+                .setFirstName(request.firstName())
+                .setLastName(request.lastName())
+                .setEmail(request.email())
+                .setPhone(request.phone())
+                .build();
+        PersonResponse newPerson = personServiceBlockingStub.createPerson(personRequest);
 
-        // Step 2: Create User in auth-service
         User user = new User();
         user.setUsername(request.username());
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
-        user.setPersonId(newPerson.id());
-        user.setRoles(Set.of("ROLE_USER")); // Default role
+        user.setPersonId(newPerson.getId());
+        user.setRoles(Set.of("ROLE_USER"));
         userRepository.save(user);
 
-        // Step 3: Send welcome notification
-        var notificationRequest = new com.company.banking.authservice.client.NotificationRequest(
-                newPerson.email(),
-                "Welcome to Our Bank!",
-                "Hello " + newPerson.firstName() + ", thank you for registering."
-        );
-        notificationServiceFeignClient.sendNotification(notificationRequest);
+        NotificationRequest notificationRequest = NotificationRequest.newBuilder()
+                .setTo(newPerson.getEmail())
+                .setSubject("Welcome to Our Bank!")
+                .setBody("Hello " + newPerson.getFirstName() + ", thank you for registering.")
+                .build();
+        notificationServiceBlockingStub.sendNotification(notificationRequest);
     }
 
     public AuthResponse login(AuthRequest request) {
