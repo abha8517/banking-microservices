@@ -1,9 +1,12 @@
 package com.company.banking.personservice.grpc;
 
 import com.company.banking.grpc.person.CreatePersonRequest;
+import com.company.banking.grpc.person.DeletePersonRequest;
+import com.company.banking.grpc.person.DeletePersonResponse;
 import com.company.banking.grpc.person.PersonRequest;
 import com.company.banking.grpc.person.PersonResponse;
 import com.company.banking.grpc.person.PersonServiceGrpc;
+import com.company.banking.grpc.person.UpdatePersonRequest;
 import com.company.banking.personservice.exception.PersonAlreadyExistsException;
 import com.company.banking.personservice.exception.PersonNotFoundException;
 import com.company.banking.personservice.service.PersonService;
@@ -55,6 +58,42 @@ public class PersonGrpcService extends PersonServiceGrpc.PersonServiceImplBase {
             responseObserver.onCompleted();
         } catch (PersonAlreadyExistsException e) {
             responseObserver.onError(io.grpc.Status.ALREADY_EXISTS
+                    .withDescription(e.getMessage())
+                    .withCause(e)
+                    .asRuntimeException());
+        }
+    }
+
+    @Override
+    public void updatePerson(UpdatePersonRequest request, StreamObserver<PersonResponse> responseObserver) {
+        try {
+            PersonDTO personToUpdate = new PersonDTO(request.getId(), request.getFirstName(), request.getLastName(), request.getEmail(), request.getPhone());
+            PersonDTO updatedPerson = personService.updatePerson(request.getId(), personToUpdate);
+            PersonResponse response = PersonResponse.newBuilder()
+                    .setId(updatedPerson.id())
+                    .setFirstName(updatedPerson.firstName())
+                    .setLastName(updatedPerson.lastName())
+                    .setEmail(updatedPerson.email())
+                    .setPhone(updatedPerson.phone())
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (PersonNotFoundException e) {
+            responseObserver.onError(io.grpc.Status.NOT_FOUND
+                    .withDescription(e.getMessage())
+                    .withCause(e)
+                    .asRuntimeException());
+        }
+    }
+
+    @Override
+    public void deletePerson(DeletePersonRequest request, StreamObserver<DeletePersonResponse> responseObserver) {
+        try {
+            personService.deletePerson(request.getId());
+            responseObserver.onNext(DeletePersonResponse.newBuilder().setSuccess(true).build());
+            responseObserver.onCompleted();
+        } catch (PersonNotFoundException e) {
+            responseObserver.onError(io.grpc.Status.NOT_FOUND
                     .withDescription(e.getMessage())
                     .withCause(e)
                     .asRuntimeException());
