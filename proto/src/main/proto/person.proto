@@ -8,6 +8,8 @@ package person;
 service PersonService {
   rpc GetPersonById(PersonRequest) returns (PersonResponse);
   rpc CreatePerson(CreatePersonRequest) returns (PersonResponse);
+  rpc UpdatePerson(UpdatePersonRequest) returns (PersonResponse);
+  rpc DeletePerson(DeletePersonRequest) returns (DeletePersonResponse);
 }
 
 message PersonRequest {
@@ -19,6 +21,22 @@ message CreatePersonRequest {
   string last_name = 2;
   string email = 3;
   string phone = 4;
+}
+
+message UpdatePersonRequest {
+  int64 id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  string phone = 5;
+}
+
+message DeletePersonRequest {
+  int64 id = 1;
+}
+
+message DeletePersonResponse {
+  bool success = 1;
 }
 
 message PersonResponse {
